@@ -1,3 +1,135 @@
-# Test repository for using the Github Desktop IDE setup.
+<!DOCTYPE html>
+<html lang="en">
 
-The base code you will use is above (in this repository) and you will make your own copy of the code (fork the code). Then you can edit your fork without impacting the original copy.
+<head>
+  <meta charset="utf-8">
+  <title>LAMP Diagnostic Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://code.jquery.com/mobile/1.3.2/jquery.mobile-1.3.2.min.css" />
+  <script src="https://code.jquery.com/jquery-1.9.1.min.js"></script>
+  <script src="https://code.jquery.com/mobile/1.3.2/jquery.mobile-1.3.2.min.js"></script>
+
+  <script>
+    function detectVerticalSquash(img) {
+      const ih = img.naturalHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = ih;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, 1, ih).data;
+      let sy = 0, ey = ih, py = ih;
+      while (py > sy) {
+        const alpha = data[(py - 1) * 4 + 3];
+        if (alpha === 0) {
+          ey = py;
+        } else {
+          sy = py;
+        }
+        py = (ey + sy) >> 1;
+      }
+      const ratio = py / ih;
+      return (ratio === 0) ? 1 : ratio;
+    }
+
+    function drawImageIOSFix(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
+      const ratio = detectVerticalSquash(img);
+      ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh / ratio);
+    }
+
+    function getAverageColor(imageData) {
+      let r = 0, g = 0, b = 0;
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+      }
+      const count = data.length / 4;
+      return [r / count, g / count, b / count];
+    }
+
+    function classifyColor(color) {
+      const [r, g, b] = color;
+      if (g > r && g > b) {
+        return "Positive (Yellow dominant)";
+      } else if (r > g && b > g) {
+        return "Negative (Pink/Purple dominant)";
+      } else {
+        return "Uncertain";
+      }
+    }
+
+    function analyzeTubes(ctx, canvas, rows, cols) {
+      const results = [];
+      const tubeWidth = canvas.width / cols;
+      const tubeHeight = canvas.height / rows;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = col * tubeWidth;
+          const y = row * tubeHeight;
+          const imageData = ctx.getImageData(x, y, tubeWidth, tubeHeight);
+          const avgColor = getAverageColor(imageData);
+          const result = classifyColor(avgColor);
+          results.push({ row: row + 1, col: col + 1, result });
+        }
+      }
+      return results;
+    }
+
+    window.onload = function () {
+      const fileInput = document.getElementById('fileInput');
+      const canvas = document.getElementById('myCanvas');
+      const context = canvas.getContext('2d');
+      const messageDisplayArea = document.getElementById('messageDisplayArea');
+      const resultDisplay = document.getElementById('resultDisplay');
+
+      fileInput.addEventListener('change', function () {
+        const file = fileInput.files[0];
+        const imageType = /image.*/;
+
+        if (file.type.match(imageType)) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const img = new Image();
+            img.onload = function () {
+              drawImageIOSFix(context, img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, 600, 500);
+
+              // Analyze individual tubes in a 2x3 grid (change as needed)
+              const tubeResults = analyzeTubes(context, canvas, 2, 3);
+              resultDisplay.innerHTML = '<h3>Diagnostic Results Per Tube:</h3>';
+              tubeResults.forEach((res, index) => {
+                resultDisplay.innerHTML += `Tube ${index + 1} (Row ${res.row}, Col ${res.col}): ${res.result}<br>`;
+              });
+            }
+            img.src = reader.result;
+            messageDisplayArea.innerHTML = "You picked an image!";
+          }
+          reader.readAsDataURL(file);
+        } else {
+          messageDisplayArea.innerHTML = "File not supported!";
+        }
+      });
+    }
+  </script>
+</head>
+
+<body>
+  <div data-role="page">
+    <div data-role="header">
+      <h1>LAMP Diagnostic</h1>
+    </div>
+    <div data-role="content">
+      <h2>Select a LAMP image for analysis:</h2>
+      <input type="file" id="fileInput" style="background-color: #FF6600;">
+      <div id="messageDisplayArea"></div>
+      <canvas id="myCanvas" width="600" height="500" style="border:1px solid #d3d3d3;"></canvas>
+      <div id="resultDisplay" style="margin-top: 20px; font-weight: bold;"></div>
+    </div>
+    <div data-role="footer" data-position="fixed">
+      <p>DIY Diagnostics - LAMP App</p>
+    </div>
+  </div>
+</body>
+
+</html>
